@@ -6,6 +6,7 @@ from botocore.exceptions import (ClientError,
                                  ConnectionError,
                                  EndpointConnectionError)
 
+import ast
 import kmsauth
 import os
 import sys
@@ -711,34 +712,44 @@ def bless(region, nocache, showgui, hostname, bless_config):
                 pass
 
     if role_creds is None:
-        mfa_pin = get_mfa_token(showgui, hostname)
-        if mfa_pin is None:
-            sys.stderr.write("Certificate creation canceled\n")
-            sys.exit(1)
-        mfa_arn = awsmfautils.get_serial(aws.iam_client(), username)
-        try:
+        mfa_enabled = ast.literal_eval(bless_config.get_client_config()['mfa_enabled'])
+        if mfa_enabled:
+            mfa_pin = get_mfa_token(showgui, hostname)
+            if mfa_pin is None:
+                sys.stderr.write("Certificate creation canceled\n")
+                sys.exit(1)
+            mfa_arn = awsmfautils.get_serial(aws.iam_client(), username)
+            try:
+                creds = aws.sts_client().get_session_token(
+                    DurationSeconds=bless_config.get_client_config()['user_session_length'],
+                    SerialNumber=mfa_arn,
+                    TokenCode=mfa_pin
+                )['Credentials']
+            except (ClientError, ParamValidationError):
+                sys.stderr.write("Incorrect MFA, no certificate issued\n")
+                sys.exit(1)
+            kmsauth_token = get_kmsauth_token(
+                creds,
+                kmsauth_config,
+                username,
+                cache=bless_cache
+            )
+            logging.debug("Got kmsauth token: {}".format(kmsauth_token))
+        else:
             creds = aws.sts_client().get_session_token(
                 DurationSeconds=bless_config.get_client_config()['user_session_length'],
-                SerialNumber=mfa_arn,
-                TokenCode=mfa_pin
             )['Credentials']
-        except (ClientError, ParamValidationError):
-            sys.stderr.write("Incorrect MFA, no certificate issued\n")
-            sys.exit(1)
 
         if creds:
             save_cached_creds(creds, bless_config)
-        kmsauth_token = get_kmsauth_token(
-            creds,
-            kmsauth_config,
-            username,
-            cache=bless_cache
-        )
-        logging.debug("Got kmsauth token: {}".format(kmsauth_token))
+
         role_creds = get_blessrole_credentials(
             aws.iam_client(), creds, bless_config, bless_cache)
 
-    bless_lambda = BlessLambda(bless_lambda_config, role_creds, kmsauth_token, region)
+    if mfa_enabled:
+        bless_lambda = BlessLambda(bless_lambda_config, role_creds, region, kmsauth_token)
+    else:
+        bless_lambda = BlessLambda(bless_lambda_config, role_creds, region)
 
     # Do bless
     if show_feedback:

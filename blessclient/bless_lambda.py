@@ -10,14 +10,15 @@ from botocore.vendored.requests.exceptions import (ReadTimeout,
 
 class BlessLambda(object):
 
-    def __init__(self, config, creds, kmsauth_token, region):
+    def __init__(self, config, creds, region, kmsauth_token=None):
         self.config = config
         self.kmsauth_token = kmsauth_token
         self.creds = creds
         self.region = region
 
     def getCert(self, payload):
-        payload['kmsauth_token'] = self.kmsauth_token
+        if self.kmsauth_token:
+            payload['kmsauth_token'] = self.kmsauth_token
         payload_json = json.dumps(payload)
         lambdabotoconfig = Config(
             connect_timeout=self.config['timeoutconfig']['connect'],

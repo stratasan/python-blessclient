@@ -35,6 +35,7 @@ class BlessConfig(object):
                 'domain_regex': config.get('CLIENT', 'domain_regex'),
                 'cache_dir': config.get('CLIENT', 'cache_dir'),
                 'cache_file': config.get('CLIENT', 'cache_file'),
+                'mfa_enabled': config.get('CLIENT', 'mfa_enabled'),
                 'mfa_cache_dir': config.get('CLIENT', 'mfa_cache_dir'),
                 'mfa_cache_file': config.get('CLIENT', 'mfa_cache_file'),
                 'ip_urls': [s.strip() for s in config.get('CLIENT', 'ip_urls').split(",")],
